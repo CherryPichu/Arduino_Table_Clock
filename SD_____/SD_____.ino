@@ -8,6 +8,8 @@
 int CS_PIN = 10;
 int Sensor0 = 0;
 String Data = "";
+int count_down = 0; // sd카드 저장 주기 시간 계산해주는 변수(20)
+int screen_change = 0; // 스크린 바뀔때 시간 세주는 변수
 
 #define DHTPIN 2        // SDA 핀의 설정
 #define DHTTYPE DHT22   // DHT22 (AM2302) 센서종류 설정
@@ -25,19 +27,16 @@ float temp3231;
 File myFile;
 
 void setup() {
+  pinMode(4, OUTPUT); // 스위치(버튼)
+  pinMode(5, INPUT_PULLUP);
   OzOled.init();  //initialze Eduino OLED display
-  OzOled.printString("Hello World!"); //Print the String
-   OzOled.clearDisplay();
   // put your setup code here, to run once:
   Serial.begin(115200); // 115200 9600
   pinMode(CS_PIN, OUTPUT);
-  
   dht.begin();
-
   Wire.begin();
   initalizeSD();
-//  createFile("Sample1.txt");
-//  myFile.close();
+  OzOled.clearDisplay();
 }
 
 void initalizeSD(){
@@ -47,70 +46,105 @@ void initalizeSD(){
     Serial.println("SD Card is ready to use.");
   }else {
     Serial.println("SD Card initalization failed");
+    OzOled.clearDisplay();
+    OzOled.printString("SD Card", 0, 0);
+    OzOled.printString("initalization failed", 0, 1);
+    delay(3000);
     return;
   }
   return;
 }
-int createFile(char filename[]){
-  myFile = SD.open(filename, FILE_WRITE);
-  if(myFile){
-    Serial.println("File created successfully");
-    return 1;
-  }else {
-    Serial.println("Error while creating file.");
-    return 0;
-  }
-}
-int writeToFile(){
-  if(myFile){
-    Sensor0 = analogRead(A0);
-    Data = String(Sensor0);
-
-    myFile.println(Data);
-    Serial.println(Data);
-    delay(100);
-    return 1;
-  }else{
-    Serial.println("Coudn't write to file");
-    return 0;
-  }
-}
+//int createFile(char filename[]){
+//  myFile = SD.open(filename, FILE_WRITE);
+//  if(myFile){
+//    Serial.println("File created successfully");
+//    return 1;
+//  }else {
+//    Serial.println("Error while creating file.");
+//    return 0;
+//  }
+//}
+//int writeToFile(){
+//  if(myFile){
+//    Sensor0 = analogRead(A0);
+//    Data = String(Sensor0);
+//
+//    myFile.println(Data);
+//    Serial.println(Data);
+//    delay(100);
+//    return 1;
+//  }else{
+//    Serial.println("Coudn't write to file");
+//    return 0;
+//  }
+//}
 void loop() {
-  
-  myFile = SD.open("test.txt", FILE_WRITE);
-  if(myFile){
-    Serial.println("File created successfully");
-  }else {
-    Serial.println("Error while creating file.");
-  }
-  
   float humidity = dht.readHumidity();
   float temp = dht.readTemperature();
-  Serial.println(temp);
   // put your main code here, to run repeatedly:
   watchConsole();
   get3231Date();
-  Data =  String(weekDay) + ", 20" + String(year) + "/" + String(month) + "/" + String(date) + " - " + String(hours) + ":" + String(minutes) + ":" + String(seconds) + " - Temp :" + String(temp);
-  myFile.println(Data);
-  Serial.println(Data);
+  Data =  String(weekDay) + ", 20" + String(year) + "/" + String(month) + "/" + String(date) + "," + String(hours) + ":" + String(minutes) + ":" + 
+       String(seconds) + " , Temp :" + String(temp) + " , Humidity :" + String(humidity);
+  if(count_down == 20){
+  //("20" + String(year) + "/" + String(month)+"/"+String(date) +"-info")
+      String file_name = String(month)+"M"+String(date)+"D.txt";
+      Serial.println(file_name);
+      myFile = SD.open(file_name, FILE_WRITE);
+      if(myFile){
+        Serial.println("File created successfully");
+      }else {
+        Serial.println("Error while creating file.");
+        OzOled.clearDisplay();
+        OzOled.printString("Error while", 0, 0);
+        OzOled.printString("creating file", 0, 1);
+        delay(2000);
+        OzOled.clearDisplay();
+      }
+    myFile.println(Data);
+    myFile.close();
+    count_down = 0;
+  }else{
+    count_down++;
+  }
   
+  
+  Serial.println(Data);
 
-  int c = 10;
-  OzOled.printString("  temp : ", 0 ,0);
-  OzOled.printNumber(round(temp)); //Print the String 
-  OzOled.printString("humidity : ", 0 ,1);
-  OzOled.printNumber(round(humidity));
-  OzOled.printString("Year : 20", 0 ,2);
-  OzOled.printNumber(round(float(year)));
-  OzOled.printString("Month : ", 0 ,3);
-  OzOled.printNumber(round(float(month)));
-  OzOled.printString("Date : ", 0 ,4);
-  OzOled.printNumber(round(float(date)));
-  OzOled.printString("Minutes : ", 0 ,5);
-  OzOled.printNumber(round(float(minutes)));
-  OzOled.printString("Seconds : ", 0 ,6);
-  OzOled.printNumber(round(float(seconds)));
-  myFile.close();
+  if(digitalRead(5) == LOW){ // 스위치가 눌렸을 경우
+    screen_change = 5;
+    OzOled.clearDisplay();
+  }
+  if(screen_change > 1){ // 버튼이 눌린 경우에 온도와 습도창을 보여준다.
+    OzOled.printString(("temp :"+String(temp,2)).c_str(), 0 ,0,10);
+    OzOled.printString(("Humidity :" + String(humidity,2)).c_str(), 0 ,2,16);
+
+    OzOled.printString((String(weekDay)+" "+ "20" + String(year) + "/" + String(month)+"/"+String(date)).c_str(), 0 ,4,16);
+    screen_change--;
+    if(screen_change == 1){
+      screen_change = 0;
+      OzOled.clearDisplay();
+    }
+  }else{
+    String str_hours = String(hours);
+    String str_minutes = String(minutes);
+    String str_seconds = String(round(float(seconds))) + "s ";
+    const char * time_hours = str_hours.c_str(); // 한글 출력 방법
+    const char * time_minutes = str_minutes.c_str(); 
+    const char * time_seconds = str_seconds.c_str(); 
+    
+    OzOled.printBigNumber(time_hours, 0, 1,3);
+    OzOled.printBigNumber(":",6,1, 10);
+    OzOled.printBigNumber(time_minutes, 9, 1,3);
+    OzOled.printString(time_seconds,12,6, 3); //x위치 y위치 글자 수
+    
+    OzOled.printString((String(weekDay)+" "+ String(month)+"/"+String(date)).c_str(),1,6, 10); 
+
+  }
+  
+  // 아래 코드는 기본 화면 구성 출력
+
+  
   delay(1000);
 }
 
@@ -125,7 +159,7 @@ void watchConsole()
 {
   if (Serial.available()) {      // Look for char in serial queue and process if found
     if (Serial.read() == 84) {   //If command = "T" Set Date
-      set3231Date();
+//      set3231Date();
       get3231Date();
       Serial.println(" ");
     }
