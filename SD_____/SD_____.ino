@@ -4,12 +4,20 @@
 #include <Wire.h>
 #include <OzOLED.h>
 #include <math.h>
+#include <WiFiNINA.h>
 
 int CS_PIN = 10;
 int Sensor0 = 0;
 String Data = "";
 int count_down = 0; // sd카드 저장 주기 시간 계산해주는 변수(20)
 int screen_change = 0; // 스크린 바뀔때 시간 세주는 변수
+
+char ssid[] = "8-1324";        // your network SSID (name)
+char pass[] = "";    // your network password (use for WPA, or use as key for WEP)
+char server[] = "api.thingspeak.com";
+int keyIndex = 0;
+int status = WL_IDLE_STATUS; // wifi 추가
+WiFiSSLClient client;
 
 #define DHTPIN 2        // SDA 핀의 설정
 #define DHTTYPE DHT22   // DHT22 (AM2302) 센서종류 설정
@@ -27,11 +35,16 @@ float temp3231;
 File myFile;
 
 void setup() {
+  
+//  send_api();
+  Serial.begin(115200); // 115200 9600
   pinMode(4, OUTPUT); // 스위치(버튼)
   pinMode(5, INPUT_PULLUP);
   OzOled.init();  //initialze Eduino OLED display
+  OzOled.printString("Hello!");
   // put your setup code here, to run once:
-  Serial.begin(115200); // 115200 9600
+  wifi_init();
+  
   pinMode(CS_PIN, OUTPUT);
   dht.begin();
   Wire.begin();
@@ -54,30 +67,43 @@ void initalizeSD(){
   }
   return;
 }
-//int createFile(char filename[]){
-//  myFile = SD.open(filename, FILE_WRITE);
-//  if(myFile){
-//    Serial.println("File created successfully");
-//    return 1;
-//  }else {
-//    Serial.println("Error while creating file.");
-//    return 0;
-//  }
-//}
-//int writeToFile(){
-//  if(myFile){
-//    Sensor0 = analogRead(A0);
-//    Data = String(Sensor0);
-//
-//    myFile.println(Data);
-//    Serial.println(Data);
-//    delay(100);
-//    return 1;
-//  }else{
-//    Serial.println("Coudn't write to file");
-//    return 0;
-//  }
-//}
+void wifi_init(){ // wifi 추가
+  if (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed!");
+    OzOled.printString("Communication with WiFi module failed!", 0,1);
+    // don't continue
+    while (true);
+  }
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    OzOled.printString("Attempting to connect to SSID: ",0,2);
+    Serial.println(ssid);
+    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
+    status = WiFi.begin(ssid, pass);
+
+    // wait 10 seconds for connection:
+    delay(10000);
+  }
+  Serial.println("Connected to wifi");
+  OzOled.printString("Connected to wifi",0,4);
+  printWiFiStatus();
+
+  Serial.println("\nStarting connection to server...");
+  OzOled.printString("Starting connection to server...",0,5);
+  // if you get a connection, report back via serial:
+}
+void send_api(int temp, int humidity) { // wifi 추가
+  if (client.connect(server, 443)) {
+    Serial.println("connected to server");
+    OzOled.printString("connected to server",0,6);
+    // Make a HTTP request:
+    client.println("GET /update?api_key=I1IPO6UY6WQG4IN8&field1="+String(temp)+"&field2="+String(humidity)+"&field3=5");
+    client.println("Host: api.thingspeak.com");
+    client.println("Connection: close");
+    client.println();
+  }
+}
+
 void loop() {
   float humidity = dht.readHumidity();
   float temp = dht.readTemperature();
@@ -91,6 +117,7 @@ void loop() {
       String file_name = String(month)+"M"+String(date)+"D.txt";
       Serial.println(file_name);
       myFile = SD.open(file_name, FILE_WRITE);
+      send_api(temp, humidity);
       if(myFile){
         Serial.println("File created successfully");
       }else {
@@ -110,7 +137,7 @@ void loop() {
   
   
   Serial.println(Data);
-
+  // 아래 코드는 기본 화면 구성 출력
   if(digitalRead(5) == LOW){ // 스위치가 눌렸을 경우
     screen_change = 5;
     OzOled.clearDisplay();
@@ -128,7 +155,7 @@ void loop() {
   }else{
     String str_hours = String(hours);
     String str_minutes = String(minutes);
-    String str_seconds = String(round(float(seconds))) + "s ";
+    String str_seconds = String(seconds) + "s ";
     const char * time_hours = str_hours.c_str(); // 한글 출력 방법
     const char * time_minutes = str_minutes.c_str(); 
     const char * time_seconds = str_seconds.c_str(); 
@@ -136,13 +163,13 @@ void loop() {
     OzOled.printBigNumber(time_hours, 0, 1,3);
     OzOled.printBigNumber(":",6,1, 10);
     OzOled.printBigNumber(time_minutes, 9, 1,3);
-    OzOled.printString(time_seconds,12,6, 3); //x위치 y위치 글자 수
+    OzOled.printString(time_seconds,11,6, 3); //x위치 y위치 글자 수
     
     OzOled.printString((String(weekDay)+" "+ String(month)+"/"+String(date)).c_str(),1,6, 10); 
 
   }
   
-  // 아래 코드는 기본 화면 구성 출력
+
 
   
   delay(1000);
@@ -265,4 +292,21 @@ float get3231Temp()
     //error! no data!
   }
   return temp3231;
+}
+
+void printWiFiStatus() { // wifi 추가 부분
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your board's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
 }
