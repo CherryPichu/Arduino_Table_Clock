@@ -11,6 +11,8 @@ int Sensor0 = 0;
 String Data = "";
 int count_down = 0; // sd카드 저장 주기 시간 계산해주는 변수(20)
 int screen_change = 0; // 스크린 바뀔때 시간 세주는 변수
+String last_save = ""; // 마지막으로 저장 시기
+String last_wifi = ""; // 마지막으로 와이파이 통신시기
 
 char ssid[] = "8-1324";        // your network SSID (name)
 char pass[] = "";    // your network password (use for WPA, or use as key for WEP)
@@ -33,9 +35,11 @@ short tMSB, tLSB;
 float temp3231;
 
 File myFile;
-
+#define LIGHTPIN A0 //Ambient light sensor reading
 void setup() {
   
+  pinMode(LIGHTPIN, INPUT); //조도 센서
+  Serial.begin(9600);
 //  send_api();
   Serial.begin(115200); // 115200 9600
   pinMode(4, OUTPUT); // 스위치(버튼)
@@ -67,6 +71,10 @@ void initalizeSD(){
   }
   return;
 }
+float get_light(){
+  float reading = analogRead(LIGHTPIN); 
+  return reading;
+}
 void wifi_init(){ // wifi 추가
   if (WiFi.status() == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
@@ -91,35 +99,54 @@ void wifi_init(){ // wifi 추가
   Serial.println("\nStarting connection to server...");
   OzOled.printString("Starting connection to server...",0,5);
   // if you get a connection, report back via serial:
+  OzOled.clearDisplay();
 }
-void send_api(int temp, int humidity) { // wifi 추가
+void send_api(int temp, int humidity, float light) { // wifi 추가
+  if(status != WL_CONNECTED){
+    wifi_init();
+  }
   if (client.connect(server, 443)) {
     Serial.println("connected to server");
-    OzOled.printString("connected to server",0,6);
+//    OzOled.printString("connected to server",0,6);
     // Make a HTTP request:
-    client.println("GET /update?api_key=I1IPO6UY6WQG4IN8&field1="+String(temp)+"&field2="+String(humidity)+"&field3=5");
+    client.println("GET /update?api_key=I1IPO6UY6WQG4IN8&field1="+String(temp)+"&field2="+String(humidity)+"&field3=" + String(light));
     client.println("Host: api.thingspeak.com");
     client.println("Connection: close");
     client.println();
+    last_wifi = String(hours) + ":" +String(minutes) + ":" + String(seconds);
   }
 }
 
 void loop() {
+  float light  = get_light();
   float humidity = dht.readHumidity();
   float temp = dht.readTemperature();
+  String light_status = "";
+  if(light > 140) {
+      light_status = "Very bright"; 
+    }else if(light > 80 && light <= 140) {
+      light_status = "Bright"; 
+    }else if(light > 60 && light <= 80) {
+      light_status = "Slight darkness";
+    }else if(light > 30 && light <= 60) {
+      light_status = "Darkness";
+    }else if(light > 0 && light <= 30) {
+      light_status = "Very dark";
+    }
   // put your main code here, to run repeatedly:
   watchConsole();
   get3231Date();
   Data =  String(weekDay) + ", 20" + String(year) + "/" + String(month) + "/" + String(date) + "," + String(hours) + ":" + String(minutes) + ":" + 
-       String(seconds) + " , Temp :" + String(temp) + " , Humidity :" + String(humidity);
+       String(seconds) + " , Temp :" + String(temp) + " , Humidity :" + String(humidity)+", light :" + String(light);
   if(count_down == 20){
   //("20" + String(year) + "/" + String(month)+"/"+String(date) +"-info")
       String file_name = String(month)+"M"+String(date)+"D.txt";
       Serial.println(file_name);
       myFile = SD.open(file_name, FILE_WRITE);
-      send_api(temp, humidity);
+      send_api(temp, humidity, light);
       if(myFile){
         Serial.println("File created successfully");
+        last_save = String(hours) + ":" +String(minutes) + ":" + String(seconds);
       }else {
         Serial.println("Error while creating file.");
         OzOled.clearDisplay();
@@ -144,9 +171,12 @@ void loop() {
   }
   if(screen_change > 1){ // 버튼이 눌린 경우에 온도와 습도창을 보여준다.
     OzOled.printString(("temp :"+String(temp,2)).c_str(), 0 ,0,10);
-    OzOled.printString(("Humidity :" + String(humidity,2)).c_str(), 0 ,2,16);
-
-    OzOled.printString((String(weekDay)+" "+ "20" + String(year) + "/" + String(month)+"/"+String(date)).c_str(), 0 ,4,16);
+    OzOled.printString(("Humidity :" + String(humidity,2)).c_str(), 0 ,1,16);
+    OzOled.printString(("Light :" + String(light, 2)).c_str(), 0 ,2,16);
+    OzOled.printString((String(weekDay)+" "+ "20" + String(year) + "/" + String(month)+"/"+String(date)).c_str(), 0 ,3,16);
+    OzOled.printString(("Status :" + light_status).c_str(), 0 ,4,16);
+    OzOled.printString(("save :" + last_save).c_str(), 0 ,5,16);
+    OzOled.printString(("wifi :" + last_wifi).c_str(), 0 ,6,16);
     screen_change--;
     if(screen_change == 1){
       screen_change = 0;
@@ -273,26 +303,26 @@ void get3231Date()
   }
 }
  
-float get3231Temp()
-{
-  //temp registers (11h-12h) get updated automatically every 64s
-  Wire.beginTransmission(DS3231_I2C_ADDRESS);
-  Wire.write(0x11);
-  Wire.endTransmission();
-  Wire.requestFrom(DS3231_I2C_ADDRESS, 2);
- 
-  if(Wire.available()) {
-    tMSB = Wire.read(); //2's complement int portion
-    tLSB = Wire.read(); //fraction portion
-   
-    temp3231 = (tMSB & B01111111); //do 2's math on Tmsb
-    temp3231 += ( (tLSB >> 6) * 0.25 ); //only care about bits 7 & 8
-  }
-  else {
-    //error! no data!
-  }
-  return temp3231;
-}
+//float get3231Temp()
+//{
+//  //temp registers (11h-12h) get updated automatically every 64s
+//  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+//  Wire.write(0x11);
+//  Wire.endTransmission();
+//  Wire.requestFrom(DS3231_I2C_ADDRESS, 2);
+// 
+//  if(Wire.available()) {
+//    tMSB = Wire.read(); //2's complement int portion
+//    tLSB = Wire.read(); //fraction portion
+//   
+//    temp3231 = (tMSB & B01111111); //do 2's math on Tmsb
+//    temp3231 += ( (tLSB >> 6) * 0.25 ); //only care about bits 7 & 8
+//  }
+//  else {
+//    //error! no data!
+//  }
+//  return temp3231;
+//}
 
 void printWiFiStatus() { // wifi 추가 부분
   // print the SSID of the network you're attached to:
