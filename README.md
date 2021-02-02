@@ -6,13 +6,9 @@
 자취방 아이템 스마트 탁상시계  (1월 18일 ~ 1월 29일) 2주
 ------------------------------
 
-**작동 영상**
+**[유튜브 동영상](https://youtu.be/rYzuArcCpqY)**
 
 [![아두이노 스마트 탁상시계 프로젝트](https://img.youtube.com/vi/rYzuArcCpqY/1.jpg)](https://youtu.be/rYzuArcCpqY)
-
-
-
-{% include video.html id="rYzuArcCpqY" %}
 
 
 
