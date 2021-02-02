@@ -10,8 +10,13 @@
 
 [![아두이노 스마트 탁상시계 프로젝트](https://img.youtube.com/vi/rYzuArcCpqY/1.jpg)](https://youtu.be/rYzuArcCpqY)
 
-<hr>
 
+
+{% include video.html id="rYzuArcCpqY" %}
+
+
+
+<hr>
 **작동 설명** 
 
 자취방 혹은 기숙사에서 온도와 습도 그리고 조도 데이터를 눈으로 직접 확인하기 어렵다.
