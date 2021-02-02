@@ -14,7 +14,7 @@ int screen_change = 0; // 스크린 바뀔때 시간 세주는 변수
 String last_save = ""; // 마지막으로 저장 시기
 String last_wifi = ""; // 마지막으로 와이파이 통신시기
 
-char ssid[] = "8-1324";        // your network SSID (name)
+char ssid[] = "8-1324";        // your network SSID (name)  8-1324  Cherry
 char pass[] = "";    // your network password (use for WPA, or use as key for WEP)
 char server[] = "api.thingspeak.com";
 int keyIndex = 0;
@@ -38,12 +38,12 @@ File myFile;
 #define LIGHTPIN A0 //Ambient light sensor reading
 void setup() {
   
-  pinMode(LIGHTPIN, INPUT); //조도 센서
-  Serial.begin(9600);
 //  send_api();
   Serial.begin(115200); // 115200 9600
+  delay(2000); // 버그 수정 딜레이를 줘야만 전원을 동시에 공급했을때 작동하는 듯?
   pinMode(4, OUTPUT); // 스위치(버튼)
   pinMode(5, INPUT_PULLUP);
+  pinMode(LIGHTPIN, INPUT); //조도 센서
   OzOled.init();  //initialze Eduino OLED display
   OzOled.printString("Hello!");
   // put your setup code here, to run once:
@@ -95,16 +95,17 @@ void wifi_init(){ // wifi 추가
   Serial.println("Connected to wifi");
   OzOled.printString("Connected to wifi",0,4);
   printWiFiStatus();
-
+   String fv = WiFi.firmwareVersion();
+    if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
+    Serial.println("Please upgrade the firmware");
+  }
   Serial.println("\nStarting connection to server...");
   OzOled.printString("Starting connection to server...",0,5);
   // if you get a connection, report back via serial:
   OzOled.clearDisplay();
 }
 void send_api(int temp, int humidity, float light) { // wifi 추가
-  if(status != WL_CONNECTED){
-    wifi_init();
-  }
+
   if (client.connect(server, 443)) {
     Serial.println("connected to server");
 //    OzOled.printString("connected to server",0,6);
@@ -116,6 +117,29 @@ void send_api(int temp, int humidity, float light) { // wifi 추가
     last_wifi = String(hours) + ":" +String(minutes) + ":" + String(seconds);
   }
 }
+void TestWiFiConnection()
+//test if always connected
+{
+ int StatusWiFi=WiFi.status();
+ if(StatusWiFi==WL_CONNECTION_LOST || StatusWiFi==WL_DISCONNECTED || StatusWiFi==WL_SCAN_COMPLETED) //if no connection
+ {
+  WiFi.end(); // WiFi를 종료한다.
+  WiFiConnect(); //if my SSID is present, connect
+ }
+}
+void WiFiConnect()
+//connect to my SSID
+{
+ status= WL_IDLE_STATUS;
+ while(status!=WL_CONNECTED)
+ {
+    OzOled.printString("try to connect..",1, 0, 15);
+   status = WiFi.begin(ssid,pass);
+   delay(2000);
+  }
+  OzOled.printString("               ",1, 0, 20);
+}
+
 
 void loop() {
   float light  = get_light();
@@ -133,6 +157,7 @@ void loop() {
     }else if(light > 0 && light <= 30) {
       light_status = "Very dark";
     }
+   TestWiFiConnection();
   // put your main code here, to run repeatedly:
   watchConsole();
   get3231Date();
